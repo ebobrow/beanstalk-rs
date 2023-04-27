@@ -1,7 +1,8 @@
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
-};
+use futures_util::{SinkExt, StreamExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio_util::codec::{Decoder, LinesCodec};
+
+mod settings;
 
 #[tokio::main]
 async fn main() {
@@ -15,8 +16,10 @@ async fn main() {
     }
 }
 
-async fn process(mut socket: TcpStream) {
-    let mut buf = Vec::new();
-    let _ = socket.read_buf(&mut buf).await.unwrap();
-    socket.write(&buf).await.unwrap();
+async fn process(socket: TcpStream) {
+    let codec = LinesCodec::new();
+    let (mut sink, mut stream) = codec.framed(socket).split();
+    while let Some(Ok(input)) = stream.next().await {
+        sink.send(input).await.unwrap();
+    }
 }
