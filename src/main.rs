@@ -5,6 +5,7 @@ use tokio_util::codec::Decoder;
 
 mod cmd;
 mod codec;
+mod parser;
 mod settings;
 
 #[tokio::main]

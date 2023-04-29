@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Ok, Result};
+use anyhow::{anyhow, bail, Result};
 use bytes::{BufMut, Bytes, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
@@ -15,14 +15,14 @@ pub struct Codec {
 }
 
 fn string_from_bytes(buf: &[u8]) -> Result<String> {
-    Ok(String::from_utf8(buf.to_vec()).map_err(|_| anyhow!("INTERNAL_ERROR"))?)
+    String::from_utf8(buf.to_vec()).map_err(|_| anyhow!("INTERNAL_ERROR"))
 }
 
 fn num_from_bytes(buf: &[u8]) -> Result<u32> {
     // TODO: don't like this string allocation
-    Ok(string_from_bytes(buf)?
+    string_from_bytes(buf)?
         .parse()
-        .map_err(|_| anyhow!("BAD_FORMAT"))?)
+        .map_err(|_| anyhow!("BAD_FORMAT"))
 }
 
 fn valid_name_char(c: u8) -> bool {

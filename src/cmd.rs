@@ -1,5 +1,9 @@
+use anyhow::bail;
 use bytes::Bytes;
 
+use crate::{codec::Data, parser::Parser};
+
+// TODO: macro to parse these :)
 enum Cmd {
     Put {
         pri: u32,
@@ -66,4 +70,26 @@ enum Cmd {
         tube_name: String,
         delay: u32,
     },
+}
+
+impl TryFrom<Vec<Data>> for Cmd {
+    type Error = anyhow::Error;
+
+    fn try_from(data: Vec<Data>) -> Result<Self, Self::Error> {
+        let mut parser = Parser::new(data);
+        let command_name = parser.consume_name()?;
+        match &command_name[..] {
+            "put" => Ok(Self::Put {
+                pri: parser.consume_integer()?,
+                delay: parser.consume_integer()?,
+                ttr: parser.consume_integer()?,
+                bytes: parser.consume_integer()?,
+                data: parser.consume_bytes()?,
+            }),
+            "use" => Ok(Self::Use {
+                tube: parser.consume_name()?,
+            }),
+            _ => bail!("BAD_FORMAT"),
+        }
+    }
 }
