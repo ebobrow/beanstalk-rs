@@ -22,7 +22,16 @@ async fn main() {
 async fn process(socket: TcpStream) {
     let codec = Codec::new();
     let (mut sink, mut stream) = codec.framed(socket).split();
-    while let Some(Ok(_input)) = stream.next().await {
-        sink.send("hey").await.unwrap();
+    while let Some(input) = stream.next().await {
+        match input {
+            Ok(_data) => {
+                // TODO: why does this infinitely loop
+                sink.send("unimplemented".to_string()).await.unwrap();
+            }
+            Err(e) => {
+                sink.send(e.to_string()).await.unwrap();
+            }
+        }
+        sink.flush().await.unwrap();
     }
 }
