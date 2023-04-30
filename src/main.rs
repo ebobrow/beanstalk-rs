@@ -27,10 +27,9 @@ async fn process(socket: TcpStream) {
     while let Some(input) = stream.next().await {
         match input {
             Ok(data) => {
-                // let _cmd = Cmd::try_from(data);
-                // TODO: why does this infinitely loop
+                let cmd = Cmd::try_from(data);
                 // sink.send("unimplemented".to_string()).await.unwrap();
-                println!("hey");
+                println!("{:?}", cmd);
             }
             Err(e) => {
                 sink.send(e.to_string()).await.unwrap();

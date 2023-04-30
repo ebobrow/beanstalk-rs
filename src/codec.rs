@@ -38,13 +38,14 @@ impl Codec {
     }
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Vec<Data>>> {
+        if buf.is_empty() {
+            return Ok(None);
+        }
+        self.next_index = 0;
         if buf.len() > 8 * 224 {
             bail!("BAD_FORMAT");
         }
         loop {
-            // if self.next_index >= buf.len() {
-            //     break;
-            // }
             let next_char = buf[self.next_index];
             if let Some(end) = buf[self.next_index..]
                 .iter()
@@ -97,7 +98,8 @@ impl Codec {
                 return Ok(None);
             }
         }
-        // let _ = buf.split_to(buf.len() - 1);
+        // TODO: this seems weird for like batch requests or something
+        buf.clear();
         // TODO: no clone
         Ok(Some(self.frame.clone()))
     }
