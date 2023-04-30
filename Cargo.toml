@@ -9,5 +9,6 @@ edition = "2021"
 anyhow = "1.0.71"
 bytes = "1.4.0"
 futures-util = { version = "0.3.28", features = ["sink"] }
+macros = { path = "./macros" }
 tokio = { version = "1.28.0", features = ["macros", "io-util", "rt-multi-thread", "net"] }
 tokio-util = { version = "0.7.8", features = ["codec"] }

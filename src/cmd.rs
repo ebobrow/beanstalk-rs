@@ -1,10 +1,9 @@
-use anyhow::bail;
 use bytes::Bytes;
-
-use crate::{codec::Data, parser::Parser};
+use macros::Parse;
 
 // TODO: macro to parse these :)
-enum Cmd {
+#[derive(Parse, PartialEq, Debug)]
+pub enum Cmd {
     Put {
         pri: u32,
         delay: u32,
@@ -72,24 +71,31 @@ enum Cmd {
     },
 }
 
-impl TryFrom<Vec<Data>> for Cmd {
-    type Error = anyhow::Error;
+#[cfg(test)]
+mod tests {
+    use crate::codec::Data;
 
-    fn try_from(data: Vec<Data>) -> Result<Self, Self::Error> {
-        let mut parser = Parser::new(data);
-        let command_name = parser.consume_name()?;
-        match &command_name[..] {
-            "put" => Ok(Self::Put {
-                pri: parser.consume_integer()?,
-                delay: parser.consume_integer()?,
-                ttr: parser.consume_integer()?,
-                bytes: parser.consume_integer()?,
-                data: parser.consume_bytes()?,
-            }),
-            "use" => Ok(Self::Use {
-                tube: parser.consume_name()?,
-            }),
-            _ => bail!("BAD_FORMAT"),
-        }
+    use super::*;
+
+    #[test]
+    fn parse() {
+        let data = vec![
+            Data::Name("put".into()),
+            Data::Integer(1),
+            Data::Integer(2),
+            Data::Integer(3),
+            Data::Integer(4),
+            Data::Body(Bytes::from_static(b"hello")),
+        ];
+        assert_eq!(
+            Cmd::try_from(data).unwrap(),
+            Cmd::Put {
+                pri: 1,
+                delay: 2,
+                ttr: 3,
+                bytes: 4,
+                data: Bytes::from_static(b"hello")
+            }
+        );
     }
 }
