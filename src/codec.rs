@@ -4,9 +4,9 @@ use tokio_util::codec::{Decoder, Encoder};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Data {
-    Name(String),
+    String(String),
     Integer(u32),
-    Body(Bytes),
+    Bytes(Bytes),
 }
 
 pub struct Codec {
@@ -63,7 +63,7 @@ impl Codec {
                     {
                         bail!("BAD_FORMAT");
                     }
-                    Data::Name(string_from_bytes(
+                    Data::String(string_from_bytes(
                         &buf[self.next_index..self.next_index + end],
                     )?)
                 } else {
@@ -84,7 +84,7 @@ impl Codec {
                         self.frame.push(data);
                         if let Some(num) = maybe_num {
                             if buf.len() > end + 1 {
-                                self.frame.push(Data::Body(Bytes::copy_from_slice(
+                                self.frame.push(Data::Bytes(Bytes::copy_from_slice(
                                     &buf[self.next_index + end + 2
                                         ..self.next_index + end + 2 + num as usize],
                                 )));
@@ -114,13 +114,29 @@ impl Decoder for Codec {
     }
 }
 
-impl Encoder<String> for Codec {
+impl Encoder<Vec<Data>> for Codec {
     type Error = anyhow::Error;
 
-    fn encode(&mut self, item: String, buf: &mut BytesMut) -> Result<(), Self::Error> {
-        buf.reserve(item.len() + 1);
-        buf.put(item.as_bytes());
-        buf.put_u8(b'\n');
+    fn encode(
+        &mut self,
+        data: Vec<Data>,
+        buf: &mut BytesMut,
+    ) -> std::result::Result<(), Self::Error> {
+        // TODO: hideous fence post??
+        let mut i = 0;
+        let length = data.len();
+        for item in data {
+            i += 1;
+            match item {
+                Data::String(name) => buf.put(name.as_bytes()),
+                Data::Integer(n) => buf.put(n.to_string().as_bytes()),
+                Data::Bytes(bytes) => buf.put(bytes),
+            }
+            if i < length {
+                buf.put_u8(b' ');
+            }
+        }
+        buf.put_slice(b"\r\n");
         Ok(())
     }
 }
@@ -137,12 +153,12 @@ mod tests {
                 .decode(&mut BytesMut::from("put 1 11 101 1\r\nh\r\n"))
                 .unwrap(),
             Some(vec![
-                Data::Name("put".into()),
+                Data::String("put".into()),
                 Data::Integer(1),
                 Data::Integer(11),
                 Data::Integer(101),
                 Data::Integer(1),
-                Data::Body(Bytes::from_static(b"h"))
+                Data::Bytes(Bytes::from_static(b"h"))
             ])
         );
         let mut codec = Codec::new();
@@ -151,8 +167,8 @@ mod tests {
                 .decode(&mut BytesMut::from("use default+$23\r\n"))
                 .unwrap(),
             Some(vec![
-                Data::Name("use".into()),
-                Data::Name("default+$23".into())
+                Data::String("use".into()),
+                Data::String("default+$23".into())
             ])
         );
     }

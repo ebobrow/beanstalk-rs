@@ -15,7 +15,7 @@ impl Parser {
     }
 
     pub fn consume_name(&mut self) -> Result<String> {
-        if let Some(Data::Name(name)) = self.data.next() {
+        if let Some(Data::String(name)) = self.data.next() {
             Ok(name)
         } else {
             bail!("BAD_FORMAT");
@@ -31,7 +31,7 @@ impl Parser {
     }
 
     pub fn consume_bytes(&mut self) -> Result<Bytes> {
-        if let Some(Data::Body(b)) = self.data.next() {
+        if let Some(Data::Bytes(b)) = self.data.next() {
             Ok(b)
         } else {
             bail!("BAD_FORMAT");
