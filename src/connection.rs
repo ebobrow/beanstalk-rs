@@ -48,6 +48,10 @@ impl Connection {
         frame: Result<Vec<Data>>,
     ) -> Result<Vec<Data>> {
         let cmd = Cmd::try_from(frame?)?;
-        cmd.run(queue)
+        cmd.run(self, queue)
+    }
+
+    pub fn use_tube(&mut self, tube: impl ToString) {
+        self.tube = tube.to_string();
     }
 }

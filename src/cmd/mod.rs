@@ -4,9 +4,10 @@ use anyhow::Result;
 use bytes::Bytes;
 use macros::Parse;
 
-use crate::{codec::Data, queue::Queue};
+use crate::{codec::Data, connection::Connection, queue::Queue};
 
 mod put;
+mod r#use;
 
 #[derive(Parse, PartialEq, Debug)]
 pub enum Cmd {
@@ -78,7 +79,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    pub fn run(self, queue: Arc<Mutex<Queue>>) -> Result<Vec<Data>> {
+    pub fn run(self, connection: &mut Connection, queue: Arc<Mutex<Queue>>) -> Result<Vec<Data>> {
         match self {
             Cmd::Put {
                 pri,
@@ -87,7 +88,7 @@ impl Cmd {
                 bytes: _,
                 data,
             } => put::put(queue, pri, delay, ttr, data),
-            Cmd::Use { tube } => todo!(),
+            Cmd::Use { tube } => r#use::use_tube(connection, queue, tube),
             Cmd::Reserve => todo!(),
             Cmd::ReserveWithTimeout { seconds } => todo!(),
             Cmd::ReserveJob { id } => todo!(),

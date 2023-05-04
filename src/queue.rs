@@ -35,6 +35,10 @@ impl Queue {
         }
     }
 
+    pub fn new_tube(&mut self, tube: impl ToString) -> &mut Tube {
+        self.tubes.entry(tube.to_string()).or_default()
+    }
+
     pub fn new_job(&mut self, tube: String, ttr: u32, pri: u32, data: Bytes) -> u32 {
         // TODO: Result with following errors:
         //      - "BURIED <id>\r\n" if the server ran out of memory trying to grow the priority
@@ -49,10 +53,11 @@ impl Queue {
         //      no longer accepting new jobs. The client should try another server or disconnect
         //      and try again later. To put the server in drain mode, send the SIGUSR1 signal to
         //      the process.
-        let tube = self.tubes.entry(tube).or_default();
-        tube.new_job(self.num_jobs, ttr, pri, data);
+        let id = self.num_jobs;
+        let tube = self.new_tube(tube);
+        tube.new_job(id, ttr, pri, data);
         self.num_jobs += 1;
-        self.num_jobs - 1
+        id
     }
 }
 
