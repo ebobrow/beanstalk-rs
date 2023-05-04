@@ -11,7 +11,6 @@ pub enum Data {
 
 pub struct Codec {
     next_index: usize,
-    frame: Vec<Data>,
 }
 
 fn string_from_bytes(buf: &[u8]) -> Result<String> {
@@ -31,13 +30,11 @@ fn valid_name_char(c: u8) -> bool {
 
 impl Codec {
     pub fn new() -> Self {
-        Self {
-            next_index: 0,
-            frame: Vec::new(),
-        }
+        Self { next_index: 0 }
     }
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Vec<Data>>> {
+        let mut frame = Vec::new();
         if buf.is_empty() {
             return Ok(None);
         }
@@ -71,7 +68,7 @@ impl Codec {
                 };
                 match buf[self.next_index + end] {
                     b' ' => {
-                        self.frame.push(data);
+                        frame.push(data);
                         self.next_index += end + 1;
                     }
                     b'\r' => {
@@ -81,10 +78,10 @@ impl Codec {
                         } else {
                             None
                         };
-                        self.frame.push(data);
+                        frame.push(data);
                         if let Some(num) = maybe_num {
                             if buf.len() > end + 1 {
-                                self.frame.push(Data::Bytes(Bytes::copy_from_slice(
+                                frame.push(Data::Bytes(Bytes::copy_from_slice(
                                     &buf[self.next_index + end + 2
                                         ..self.next_index + end + 2 + num as usize],
                                 )));
@@ -100,8 +97,7 @@ impl Codec {
         }
         // TODO: this seems weird for like batch requests or something
         buf.clear();
-        // TODO: no clone
-        Ok(Some(self.frame.clone()))
+        Ok(Some(frame))
     }
 }
 

@@ -12,7 +12,7 @@ async fn main() {
     let n = stream.read(&mut buffer[..]).await.unwrap();
     println!("{:?}", std::str::from_utf8(&buffer[..n]));
 
-    // TODO: first of all, why doesn't this work. second of all, this is ugly code
+    // TODO: this is ugly code
     stream.write_all(b"put 1 1 1 1\r\nh\r\n").await.unwrap();
 
     let mut buffer = [0; 1024];
