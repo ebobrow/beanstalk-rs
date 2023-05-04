@@ -1,14 +1,15 @@
 use std::sync::{Arc, Mutex};
 
-use cmd::Cmd;
-use codec::{Codec, Data};
-use futures_util::{SinkExt, StreamExt};
+use codec::BeanstalkCodec;
+use connection::Connection;
+
 use queue::Queue;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio_util::codec::Decoder;
 
 mod cmd;
 mod codec;
+mod connection;
 mod parser;
 mod queue;
 mod settings;
@@ -23,26 +24,9 @@ async fn main() {
         let queue = queue.clone();
 
         tokio::spawn(async move {
-            process(queue, socket).await;
+            let codec = BeanstalkCodec::new();
+            let mut connection = Connection::new(codec.framed(socket));
+            connection.run(queue).await;
         });
-    }
-}
-
-async fn process(queue: Arc<Mutex<Queue>>, socket: TcpStream) {
-    let codec = Codec::new();
-    let (mut sink, mut stream) = codec.framed(socket).split();
-    while let Some(input) = stream.next().await {
-        match input {
-            Ok(data) => {
-                // TODO: send these errors
-                let cmd = Cmd::try_from(data).unwrap();
-                let res = cmd.run(queue.clone()).unwrap();
-                sink.send(res).await.unwrap();
-            }
-            Err(e) => {
-                sink.send(vec![Data::String(e.to_string())]).await.unwrap();
-            }
-        }
-        sink.flush().await.unwrap();
     }
 }

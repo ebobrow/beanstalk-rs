@@ -52,7 +52,7 @@ impl Queue {
         let tube = self.tubes.entry(tube).or_default();
         tube.new_job(self.num_jobs, ttr, pri, data);
         self.num_jobs += 1;
-        return self.num_jobs - 1;
+        self.num_jobs - 1
     }
 }
 

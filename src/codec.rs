@@ -9,7 +9,7 @@ pub enum Data {
     Bytes(Bytes),
 }
 
-pub struct Codec {
+pub struct BeanstalkCodec {
     next_index: usize,
 }
 
@@ -28,7 +28,7 @@ fn valid_name_char(c: u8) -> bool {
     c.is_ascii_digit() || c.is_ascii_alphabetic() || b"-+/;.$_()".contains(&c)
 }
 
-impl Codec {
+impl BeanstalkCodec {
     pub fn new() -> Self {
         Self { next_index: 0 }
     }
@@ -101,7 +101,7 @@ impl Codec {
     }
 }
 
-impl Decoder for Codec {
+impl Decoder for BeanstalkCodec {
     type Item = Vec<Data>;
     type Error = anyhow::Error;
 
@@ -110,7 +110,7 @@ impl Decoder for Codec {
     }
 }
 
-impl Encoder<Vec<Data>> for Codec {
+impl Encoder<Vec<Data>> for BeanstalkCodec {
     type Error = anyhow::Error;
 
     fn encode(
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn decodes() {
-        let mut codec = Codec::new();
+        let mut codec = BeanstalkCodec::new();
         assert_eq!(
             codec
                 .decode(&mut BytesMut::from("put 1 11 101 1\r\nh\r\n"))
@@ -157,7 +157,7 @@ mod tests {
                 Data::Bytes(Bytes::from_static(b"h"))
             ])
         );
-        let mut codec = Codec::new();
+        let mut codec = BeanstalkCodec::new();
         assert_eq!(
             codec
                 .decode(&mut BytesMut::from("use default+$23\r\n"))
@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn int_too_big() {
-        let mut codec = Codec::new();
+        let mut codec = BeanstalkCodec::new();
         if let Err(e) = codec.decode(&mut BytesMut::from("4294967296\r\n")) {
             assert_eq!(e.to_string(), "BAD_FORMAT");
         } else {
@@ -181,14 +181,14 @@ mod tests {
 
     #[test]
     fn invalid_name() {
-        let mut codec = Codec::new();
+        let mut codec = BeanstalkCodec::new();
         if let Err(e) = codec.decode(&mut BytesMut::from("-name\r\n")) {
             assert_eq!(e.to_string(), "BAD_FORMAT");
         } else {
             panic!("did not error");
         }
 
-        let mut codec = Codec::new();
+        let mut codec = BeanstalkCodec::new();
         if let Err(e) = codec.decode(&mut BytesMut::from("name^\r\n")) {
             assert_eq!(e.to_string(), "BAD_FORMAT");
         } else {
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn too_long() {
-        let mut codec = Codec::new();
+        let mut codec = BeanstalkCodec::new();
         if let Err(e) = codec.decode(&mut BytesMut::from(
             &format!("{}\r\n", "a".repeat(8 * 224))[..],
         )) {
@@ -207,7 +207,7 @@ mod tests {
             panic!("did not error");
         }
 
-        let mut codec = Codec::new();
+        let mut codec = BeanstalkCodec::new();
         if let Err(e) = codec.decode(&mut BytesMut::from(
             &format!("put {}\r\n", "a".repeat(8 * 201))[..],
         )) {
