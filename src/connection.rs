@@ -54,4 +54,8 @@ impl Connection {
     pub fn use_tube(&mut self, tube: impl ToString) {
         self.tube = tube.to_string();
     }
+
+    pub fn tube(&self) -> &str {
+        self.tube.as_ref()
+    }
 }

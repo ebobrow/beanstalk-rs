@@ -43,12 +43,7 @@ impl Queue {
         // TODO: Result with following errors:
         //      - "BURIED <id>\r\n" if the server ran out of memory trying to grow the priority
         //      queue data structure.
-        //      - <id> is the integer id of the new job
-        //      - "EXPECTED_CRLF\r\n" The job body must be followed by a CR-LF pair, that is,
-        //      "\r\n". These two bytes are not counted in the job size given by the client in the
-        //      put command line.
-        //      - "JOB_TOO_BIG\r\n" The client has requested to put a job with a body larger than
-        //      max-job-size bytes.
+        //          - <id> is the integer id of the new job
         //      - "DRAINING\r\n" This means that the server has been put into "drain mode" and is
         //      no longer accepting new jobs. The client should try another server or disconnect
         //      and try again later. To put the server in drain mode, send the SIGUSR1 signal to

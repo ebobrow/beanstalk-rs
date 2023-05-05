@@ -80,7 +80,7 @@ fn camel_case(ident: impl ToString) -> String {
         .chars()
         .flat_map(|c| {
             if c.is_ascii_uppercase() {
-                vec!['_', ((c as u8) + 32) as char]
+                vec!['-', ((c as u8) + 32) as char]
             } else {
                 vec![c]
             }

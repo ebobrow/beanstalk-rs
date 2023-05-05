@@ -87,7 +87,7 @@ impl Cmd {
                 ttr,
                 bytes: _,
                 data,
-            } => put::put(queue, pri, delay, ttr, data),
+            } => put::put(connection, queue, pri, delay, ttr, data),
             Cmd::Use { tube } => r#use::use_tube(connection, queue, tube),
             Cmd::Reserve => todo!(),
             Cmd::ReserveWithTimeout { seconds } => todo!(),

@@ -2,6 +2,8 @@ use anyhow::{anyhow, bail, Result};
 use bytes::{BufMut, Bytes, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
+use crate::settings;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Data {
     String(String),
@@ -74,6 +76,9 @@ impl BeanstalkCodec {
                     b'\r' => {
                         assert_eq!(buf[self.next_index + end + 1], b'\n');
                         let maybe_num = if let Data::Integer(n) = data {
+                            if n > settings::MAX_JOB_SIZE {
+                                bail!("JOB_TOO_BIG");
+                            }
                             Some(n)
                         } else {
                             None
@@ -81,6 +86,13 @@ impl BeanstalkCodec {
                         frame.push(data);
                         if let Some(num) = maybe_num {
                             if buf.len() > end + 1 {
+                                if buf.len() < self.next_index + end + 4
+                                    || &buf[self.next_index + end + 2 + num as usize
+                                        ..self.next_index + end + 4 + num as usize]
+                                        != b"\r\n"
+                                {
+                                    bail!("EXPECTED_CRLF");
+                                }
                                 frame.push(Data::Bytes(Bytes::copy_from_slice(
                                     &buf[self.next_index + end + 2
                                         ..self.next_index + end + 2 + num as usize],
@@ -212,6 +224,25 @@ mod tests {
             &format!("put {}\r\n", "a".repeat(8 * 201))[..],
         )) {
             assert_eq!(e.to_string(), "BAD_FORMAT");
+        } else {
+            panic!("did not error");
+        }
+
+        let mut codec = BeanstalkCodec::new();
+        if let Err(e) = codec.decode(&mut BytesMut::from(
+            &format!("put 1 1 1 {}\r\n", settings::MAX_JOB_SIZE + 1)[..],
+        )) {
+            assert_eq!(e.to_string(), "JOB_TOO_BIG");
+        } else {
+            panic!("did not error");
+        }
+    }
+
+    #[test]
+    fn no_crlf() {
+        let mut codec = BeanstalkCodec::new();
+        if let Err(e) = codec.decode(&mut BytesMut::from("put 1 1 1 1\r\nh")) {
+            assert_eq!(e.to_string(), "EXPECTED_CRLF");
         } else {
             panic!("did not error");
         }
