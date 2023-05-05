@@ -6,8 +6,10 @@ use macros::Parse;
 
 use crate::{codec::Data, connection::Connection, queue::Queue};
 
+mod ignore;
 mod put;
 mod r#use;
+mod watch;
 
 #[derive(Parse, PartialEq, Debug)]
 pub enum Cmd {
@@ -96,8 +98,8 @@ impl Cmd {
             Cmd::Release { id, pri, delay } => todo!(),
             Cmd::Bury { id, pri } => todo!(),
             Cmd::Touch { id } => todo!(),
-            Cmd::Watch { tube } => todo!(),
-            Cmd::Ignore { tube } => todo!(),
+            Cmd::Watch { tube } => watch::watch(connection, tube),
+            Cmd::Ignore { tube } => ignore::ignore(connection, tube),
             Cmd::Peek { id } => todo!(),
             Cmd::PeekReady => todo!(),
             Cmd::PeekDelayed => todo!(),

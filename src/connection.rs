@@ -58,4 +58,25 @@ impl Connection {
     pub fn tube(&self) -> &str {
         self.tube.as_ref()
     }
+
+    pub fn get_watched_tubes(&self) -> &[String] {
+        &self.watch
+    }
+
+    pub fn watch(&mut self, tube: String) {
+        if !self.watch.contains(&tube) {
+            self.watch.push(tube);
+        }
+    }
+
+    pub fn ignore(&mut self, tube: String) {
+        if let Some((i, _)) = self
+            .watch
+            .iter()
+            .enumerate()
+            .find(|(_, name)| name == &&tube)
+        {
+            self.watch.remove(i);
+        }
+    }
 }
