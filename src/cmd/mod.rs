@@ -6,6 +6,7 @@ use macros::Parse;
 
 use crate::{codec::Data, connection::Connection, queue::Queue};
 
+mod delete;
 mod ignore;
 mod put;
 mod r#use;
@@ -94,7 +95,7 @@ impl Cmd {
             Cmd::Reserve => todo!(),
             Cmd::ReserveWithTimeout { seconds } => todo!(),
             Cmd::ReserveJob { id } => todo!(),
-            Cmd::Delete { id } => todo!(),
+            Cmd::Delete { id } => delete::delete(queue, id),
             Cmd::Release { id, pri, delay } => todo!(),
             Cmd::Bury { id, pri } => todo!(),
             Cmd::Touch { id } => todo!(),
