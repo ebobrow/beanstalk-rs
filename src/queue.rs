@@ -141,21 +141,53 @@ async fn watch_delayed_jobs(
     }
 }
 
-// TODO: how do I run tests without setting up a while thread and communication channel :(
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
 
-//     #[test]
-//     fn tube_ready() {
-//         let mut queue = Queue::new();
-//         queue.new_job("default".to_string(), 0, 0, Bytes::new());
-//         queue.new_job("default".to_string(), 0, 0, Bytes::new());
-//         queue.new_job("default".to_string(), 0, 10, Bytes::new());
-//         queue.new_job("default".to_string(), 0, 1, Bytes::new());
-//         assert_eq!(
-//             queue.tubes.get("default").unwrap().ready,
-//             VecDeque::from([0, 1, 3, 2])
-//         );
-//     }
-// }
+    use super::*;
+
+    #[tokio::test]
+    async fn tube_ready() {
+        let (ready_job_tx, _ready_job_rx) = mpsc::channel(100);
+        let mut queue = Queue::new(ready_job_tx);
+        queue.new_job("default".to_string(), 0, 0, Bytes::new());
+        queue.new_job("default".to_string(), 0, 0, Bytes::new());
+        queue.new_job("default".to_string(), 0, 10, Bytes::new());
+        queue.new_job("default".to_string(), 0, 1, Bytes::new());
+        assert_eq!(
+            queue.tubes.get("default").unwrap().ready,
+            VecDeque::from([0, 1, 3, 2])
+        );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn delay_job() {
+        use std::sync::{Arc, Mutex};
+
+        let (ready_job_tx, mut ready_job_rx) = mpsc::channel(100);
+        let done = Arc::new(Mutex::new(false));
+
+        let done1 = done.clone();
+        tokio::spawn(async move {
+            if let Some(_) = ready_job_rx.recv().await {
+                let mut done = done1.lock().unwrap();
+                *done = true;
+            }
+        });
+
+        let mut queue = Queue::new(ready_job_tx);
+        queue
+            .new_delayed_job("default".to_string(), 0, 0, 1, Bytes::new())
+            .await;
+        {
+            let done = done.lock().unwrap();
+            assert!(!*done);
+        }
+        sleep(Duration::from_secs_f32(1.1)).await;
+        {
+            let done = done.lock().unwrap();
+            assert!(*done);
+        }
+    }
+}
