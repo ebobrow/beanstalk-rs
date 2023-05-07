@@ -31,7 +31,8 @@ async fn main() {
 
         tokio::spawn(async move {
             let codec = BeanstalkCodec::new();
-            let mut connection = Connection::new(codec.framed(socket));
+            let connection = Connection::new(codec.framed(socket));
+            let mut connection = connection.lock().await;
             connection.run(queue).await;
         });
     }

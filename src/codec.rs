@@ -9,6 +9,9 @@ pub enum Data {
     String(String),
     Integer(u32),
     Bytes(Bytes),
+
+    /// Internal thing to format responses correctly
+    Crlf,
 }
 
 pub struct BeanstalkCodec {
@@ -75,6 +78,7 @@ impl BeanstalkCodec {
                     }
                     b'\r' => {
                         assert_eq!(buf[self.next_index + end + 1], b'\n');
+                        // TODO: this number isn't always followed by a job
                         let maybe_num = if let Data::Integer(n) = data {
                             if n > settings::MAX_JOB_SIZE {
                                 bail!("JOB_TOO_BIG");
@@ -85,7 +89,7 @@ impl BeanstalkCodec {
                         };
                         frame.push(data);
                         if let Some(num) = maybe_num {
-                            if buf.len() > end + 1 {
+                            if buf.len() > self.next_index + end + 2 {
                                 if buf.len() < self.next_index + end + 4
                                     || &buf[self.next_index + end + 2 + num as usize
                                         ..self.next_index + end + 4 + num as usize]
@@ -133,14 +137,15 @@ impl Encoder<Vec<Data>> for BeanstalkCodec {
         // TODO: hideous fence post??
         let mut i = 0;
         let length = data.len();
-        for item in data {
+        for item in &data {
             i += 1;
             match item {
                 Data::String(name) => buf.put(name.as_bytes()),
                 Data::Integer(n) => buf.put(n.to_string().as_bytes()),
-                Data::Bytes(bytes) => buf.put(bytes),
+                Data::Bytes(bytes) => buf.put(bytes.clone()),
+                Data::Crlf => buf.put_slice(b"\r\n"),
             }
-            if i < length {
+            if i < length && !matches!(item, Data::Crlf) && !matches!(data[i], Data::Crlf) {
                 buf.put_u8(b' ');
             }
         }

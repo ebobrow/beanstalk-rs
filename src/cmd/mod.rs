@@ -10,6 +10,7 @@ use crate::{codec::Data, connection::Connection, queue::Queue};
 mod delete;
 mod ignore;
 mod put;
+mod reserve;
 mod r#use;
 mod watch;
 
@@ -97,10 +98,12 @@ impl Cmd {
                 data,
             } => put::put(connection, queue, pri, delay, ttr, data).await,
             Cmd::Use { tube } => r#use::use_tube(connection, queue, tube).await,
-            Cmd::Reserve => todo!(),
-            Cmd::ReserveWithTimeout { seconds } => todo!(),
+            Cmd::Reserve => reserve::reserve_with_timeout(connection, queue, 0).await,
+            Cmd::ReserveWithTimeout { seconds } => {
+                reserve::reserve_with_timeout(connection, queue, seconds).await
+            }
             Cmd::ReserveJob { id } => todo!(),
-            Cmd::Delete { id } => delete::delete(queue, id).await,
+            Cmd::Delete { id } => delete::delete(connection, queue, id).await,
             Cmd::Release { id, pri, delay } => todo!(),
             Cmd::Bury { id, pri } => todo!(),
             Cmd::Touch { id } => todo!(),

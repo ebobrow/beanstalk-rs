@@ -1,5 +1,8 @@
 use futures_util::StreamExt;
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    task::Poll,
+};
 
 use bytes::Bytes;
 use futures_util::stream::FuturesUnordered;
@@ -19,6 +22,7 @@ pub struct Queue {
 #[derive(Default)]
 pub struct Tube {
     ready: VecDeque<u32>,
+    smallest_pri: u32,
 
     /// In original implementation this is a FIFO linked list
     buried: Vec<u32>,
@@ -26,10 +30,10 @@ pub struct Tube {
 
 #[derive(Debug, PartialEq)]
 pub struct Job {
-    id: u32,
-    ttr: u32,
-    pri: u32,
-    data: Bytes,
+    pub id: u32,
+    pub ttr: u32,
+    pub pri: u32,
+    pub data: Bytes,
 }
 
 impl Queue {
@@ -43,6 +47,10 @@ impl Queue {
             jobs: Vec::new(),
             new_job_tx,
         }
+    }
+
+    fn job(&self, id: &u32) -> &Job {
+        self.jobs.iter().find(|job| &job.id == id).unwrap()
     }
 
     pub fn new_tube(&mut self, tube: impl ToString) -> &mut Tube {
@@ -79,10 +87,13 @@ impl Queue {
     }
 
     pub fn queue_job(&mut self, tube: String, id: u32) {
+        // TODO: why error when use `self.job(&id)`?
+        // also just store `&Job`?
         let job = self.jobs.iter().find(|job| job.id == id).unwrap();
         let tube = self.tubes.entry(tube).or_default();
         if tube.ready.is_empty() {
             tube.ready.push_back(id);
+            tube.smallest_pri = job.pri;
             return;
         }
         let mut index = match tube.ready.binary_search_by_key(&job.pri, |id| {
@@ -103,6 +114,9 @@ impl Queue {
             index += 1;
         }
         tube.ready.insert(index, id);
+        if index == 0 {
+            tube.smallest_pri = job.pri;
+        }
     }
 
     pub fn delete_job(&mut self, id: u32) -> bool {
@@ -113,10 +127,23 @@ impl Queue {
             false
         }
     }
+
+    pub fn reserve_job(&mut self, watch_list: &[String]) -> Poll<&Job> {
+        let name = watch_list
+            .iter()
+            .min_by_key(|&name| self.tubes.get(name).unwrap().smallest_pri)
+            .unwrap();
+        let tube = self.tubes.get_mut(name).unwrap();
+        match tube.ready.pop_front() {
+            Some(id) => Poll::Ready(self.job(&id)),
+            None => Poll::Pending,
+        }
+    }
 }
 
 impl Job {
     pub fn new(id: u32, ttr: u32, pri: u32, data: Bytes) -> Self {
+        let ttr = if ttr == 0 { 1 } else { ttr };
         Self { id, ttr, pri, data }
     }
 }
@@ -158,6 +185,20 @@ mod tests {
             queue.tubes.get("default").unwrap().ready,
             VecDeque::from([0, 1, 3, 2])
         );
+    }
+
+    #[tokio::test]
+    async fn smallest_pri() {
+        let (ready_job_tx, _ready_job_rx) = mpsc::channel(100);
+        let mut queue = Queue::new(ready_job_tx);
+        queue.new_job("default".to_string(), 0, 100, Bytes::new());
+        assert_eq!(queue.tubes.get("default").unwrap().smallest_pri, 100);
+        queue.new_job("default".to_string(), 0, 1000, Bytes::new());
+        assert_eq!(queue.tubes.get("default").unwrap().smallest_pri, 100);
+        queue.new_job("default".to_string(), 0, 10, Bytes::new());
+        assert_eq!(queue.tubes.get("default").unwrap().smallest_pri, 10);
+        queue.new_job("default".to_string(), 0, 1, Bytes::new());
+        assert_eq!(queue.tubes.get("default").unwrap().smallest_pri, 1);
     }
 
     #[tokio::test]
