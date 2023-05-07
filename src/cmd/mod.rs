@@ -1,8 +1,9 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Result;
 use bytes::Bytes;
 use macros::Parse;
+use tokio::sync::Mutex;
 
 use crate::{codec::Data, connection::Connection, queue::Queue};
 
@@ -82,7 +83,11 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    pub fn run(self, connection: &mut Connection, queue: Arc<Mutex<Queue>>) -> Result<Vec<Data>> {
+    pub async fn run(
+        self,
+        connection: &mut Connection,
+        queue: Arc<Mutex<Queue>>,
+    ) -> Result<Vec<Data>> {
         match self {
             Cmd::Put {
                 pri,
@@ -90,12 +95,12 @@ impl Cmd {
                 ttr,
                 bytes: _,
                 data,
-            } => put::put(connection, queue, pri, delay, ttr, data),
-            Cmd::Use { tube } => r#use::use_tube(connection, queue, tube),
+            } => put::put(connection, queue, pri, delay, ttr, data).await,
+            Cmd::Use { tube } => r#use::use_tube(connection, queue, tube).await,
             Cmd::Reserve => todo!(),
             Cmd::ReserveWithTimeout { seconds } => todo!(),
             Cmd::ReserveJob { id } => todo!(),
-            Cmd::Delete { id } => delete::delete(queue, id),
+            Cmd::Delete { id } => delete::delete(queue, id).await,
             Cmd::Release { id, pri, delay } => todo!(),
             Cmd::Bury { id, pri } => todo!(),
             Cmd::Touch { id } => todo!(),

@@ -1,8 +1,8 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, sync::Mutex};
 use tokio_util::codec::Framed;
 
 use crate::{
@@ -30,7 +30,7 @@ impl Connection {
 
     pub async fn run(&mut self, queue: Arc<Mutex<Queue>>) {
         while let Some(input) = self.stream.next().await {
-            match self.handle_frame(queue.clone(), input) {
+            match self.handle_frame(queue.clone(), input).await {
                 Ok(data) => self.stream.send(data).await.unwrap(),
                 Err(e) => self
                     .stream
@@ -38,17 +38,16 @@ impl Connection {
                     .await
                     .unwrap(),
             }
-            self.stream.flush().await.unwrap();
         }
     }
 
-    pub fn handle_frame(
+    pub async fn handle_frame(
         &mut self,
         queue: Arc<Mutex<Queue>>,
         frame: Result<Vec<Data>>,
     ) -> Result<Vec<Data>> {
         let cmd = Cmd::try_from(frame?)?;
-        cmd.run(self, queue)
+        cmd.run(self, queue).await
     }
 
     pub fn use_tube(&mut self, tube: impl ToString) {

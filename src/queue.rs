@@ -1,19 +1,24 @@
+use futures_util::StreamExt;
 use std::collections::{HashMap, VecDeque};
 
 use bytes::Bytes;
+use futures_util::stream::FuturesUnordered;
+use tokio::{
+    select,
+    sync::mpsc,
+    time::{sleep, Duration},
+};
 
 pub struct Queue {
     // TODO: `Connection` struct with watch list
     tubes: HashMap<String, Tube>,
     jobs: Vec<Job>,
+    new_job_tx: mpsc::Sender<(String, u32, u32)>,
 }
 
 #[derive(Default)]
 pub struct Tube {
     ready: VecDeque<u32>,
-
-    // TODO: how to handle delays
-    delay: VecDeque<u32>,
 
     /// In original implementation this is a FIFO linked list
     buried: Vec<u32>,
@@ -28,10 +33,15 @@ pub struct Job {
 }
 
 impl Queue {
-    pub fn new() -> Self {
+    pub fn new(ready_job_tx: mpsc::Sender<(String, u32)>) -> Self {
+        let (new_job_tx, new_job_rx) = mpsc::channel(100);
+        // This is an implementation detail that differs from the original Beanstalk. Instead of each
+        // tube having a delay queue, they are all in this one to make async polling easier.
+        tokio::spawn(watch_delayed_jobs(new_job_rx, ready_job_tx));
         Self {
             tubes: HashMap::from([("default".to_string(), Tube::default())]),
             jobs: Vec::new(),
+            new_job_tx,
         }
     }
 
@@ -50,12 +60,32 @@ impl Queue {
         //      the process.
         let id = self.jobs.len() as u32;
         self.jobs.push(Job::new(id, ttr, pri, data));
-        let tube = self.tubes.entry(tube.to_string()).or_default();
+        self.queue_job(tube, id);
+        id
+    }
+
+    pub async fn new_delayed_job(
+        &mut self,
+        tube: String,
+        ttr: u32,
+        pri: u32,
+        delay: u32,
+        data: Bytes,
+    ) -> u32 {
+        let id = self.jobs.len() as u32;
+        self.jobs.push(Job::new(id, ttr, pri, data));
+        self.new_job_tx.send((tube, id, delay)).await.unwrap();
+        id
+    }
+
+    pub fn queue_job(&mut self, tube: String, id: u32) {
+        let job = self.jobs.iter().find(|job| job.id == id).unwrap();
+        let tube = self.tubes.entry(tube).or_default();
         if tube.ready.is_empty() {
             tube.ready.push_back(id);
-            return id;
+            return;
         }
-        let mut index = match tube.ready.binary_search_by_key(&pri, |id| {
+        let mut index = match tube.ready.binary_search_by_key(&job.pri, |id| {
             self.jobs.iter().find(|job| &job.id == id).unwrap().pri
         }) {
             Ok(i) => i,
@@ -68,12 +98,11 @@ impl Queue {
                 .find(|job| job.id == tube.ready[index])
                 .unwrap()
                 .pri
-                == pri
+                == job.pri
         {
             index += 1;
         }
         tube.ready.insert(index, id);
-        id
     }
 
     pub fn delete_job(&mut self, id: u32) -> bool {
@@ -92,20 +121,41 @@ impl Job {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tube_ready() {
-        let mut queue = Queue::new();
-        queue.new_job("default".to_string(), 0, 0, Bytes::new());
-        queue.new_job("default".to_string(), 0, 0, Bytes::new());
-        queue.new_job("default".to_string(), 0, 10, Bytes::new());
-        queue.new_job("default".to_string(), 0, 1, Bytes::new());
-        assert_eq!(
-            queue.tubes.get("default").unwrap().ready,
-            VecDeque::from([0, 1, 3, 2])
-        );
+async fn watch_delayed_jobs(
+    mut new_job_rx: mpsc::Receiver<(String, u32, u32)>,
+    ready_job_tx: mpsc::Sender<(String, u32)>,
+) {
+    let mut jobs = FuturesUnordered::new();
+    loop {
+        select! {
+            Some((tube, id, delay)) = new_job_rx.recv() => {
+                jobs.push(tokio::spawn(async move {
+                    sleep(Duration::from_secs(delay as u64)).await;
+                    (tube, id)
+                }));
+            }
+            Some(Ok(job)) = jobs.next() => {
+                ready_job_tx.send(job).await.unwrap();
+            }
+        }
     }
 }
+
+// TODO: how do I run tests without setting up a while thread and communication channel :(
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     #[test]
+//     fn tube_ready() {
+//         let mut queue = Queue::new();
+//         queue.new_job("default".to_string(), 0, 0, Bytes::new());
+//         queue.new_job("default".to_string(), 0, 0, Bytes::new());
+//         queue.new_job("default".to_string(), 0, 10, Bytes::new());
+//         queue.new_job("default".to_string(), 0, 1, Bytes::new());
+//         assert_eq!(
+//             queue.tubes.get("default").unwrap().ready,
+//             VecDeque::from([0, 1, 3, 2])
+//         );
+//     }
+// }
