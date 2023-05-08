@@ -139,6 +139,10 @@ impl Queue {
             None => Poll::Pending,
         }
     }
+
+    pub fn tube_names(&self) -> std::collections::hash_map::Keys<String, Tube> {
+        self.tubes.keys()
+    }
 }
 
 impl Job {
