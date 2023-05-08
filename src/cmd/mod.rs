@@ -10,6 +10,7 @@ use crate::{codec::Data, connection::Connection, queue::Queue};
 mod delete;
 mod ignore;
 mod put;
+mod quit;
 mod reserve;
 mod r#use;
 mod watch;
@@ -121,7 +122,7 @@ impl Cmd {
             Cmd::ListTubes => todo!(),
             Cmd::ListTubeUsed => todo!(),
             Cmd::ListTubesWatched => todo!(),
-            Cmd::Quit => todo!(),
+            Cmd::Quit => quit::quit(connection),
             Cmd::PauseTube { tube_name, delay } => todo!(),
         }
     }

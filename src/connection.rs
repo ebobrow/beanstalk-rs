@@ -5,7 +5,7 @@ use futures_util::{stream::FuturesUnordered, SinkExt, StreamExt};
 use tokio::{
     net::TcpStream,
     select,
-    sync::{mpsc, Mutex},
+    sync::{mpsc, Mutex, Notify},
     time::{sleep, Duration},
 };
 use tokio_util::codec::Framed;
@@ -22,6 +22,8 @@ pub struct Connection {
     stream: Framed<TcpStream, BeanstalkCodec>,
 
     reserved_job_tx: mpsc::Sender<ReserveCommand>,
+
+    shutdown: Notify,
 }
 
 impl Connection {
@@ -33,16 +35,24 @@ impl Connection {
             watch: vec!["default".into()],
             stream,
             reserved_job_tx,
+            shutdown: Notify::new(),
         }));
         tokio::spawn(watch_reserved_jobs(reserved_job_rx, connection.clone()));
         connection
     }
 
     pub async fn run(&mut self, queue: Arc<Mutex<Queue>>) {
-        while let Some(input) = self.stream.next().await {
-            match self.handle_frame(queue.clone(), input).await {
-                Ok(data) => self.send_frame(data).await,
-                Err(e) => self.send_frame(vec![Data::String(e.to_string())]).await,
+        loop {
+            select! {
+                Some(input) = self.stream.next() => {
+                    match self.handle_frame(queue.clone(), input).await {
+                        Ok(data) => self.send_frame(data).await,
+                        Err(e) => self.send_frame(vec![Data::String(e.to_string())]).await,
+                    }
+                }
+                _ = self.shutdown.notified() => {
+                    break;
+                }
             }
         }
     }
@@ -101,6 +111,10 @@ impl Connection {
             .send(ReserveCommand::Remove { id })
             .await
             .unwrap();
+    }
+
+    pub fn quit(&mut self) {
+        self.shutdown.notify_one();
     }
 }
 
