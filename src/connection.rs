@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use bytes::Bytes;
 use futures_util::{stream::FuturesUnordered, SinkExt, StreamExt};
 use tokio::{
     net::TcpStream,
@@ -22,6 +23,8 @@ pub struct Connection {
     stream: Framed<TcpStream, BeanstalkCodec>,
 
     reserved_job_tx: mpsc::Sender<ReserveCommand>,
+    get_job_tx: mpsc::Sender<Option<(u32, u32, Bytes)>>,
+    get_job_rx: mpsc::Receiver<Option<(u32, u32, Bytes)>>,
 
     shutdown: Notify,
 }
@@ -29,6 +32,7 @@ pub struct Connection {
 impl Connection {
     pub fn new(stream: Framed<TcpStream, BeanstalkCodec>) -> Arc<Mutex<Self>> {
         let (reserved_job_tx, reserved_job_rx) = mpsc::channel(100);
+        let (get_job_tx, get_job_rx) = mpsc::channel(100);
 
         let connection = Arc::new(Mutex::new(Self {
             tube: "default".into(),
@@ -36,6 +40,8 @@ impl Connection {
             stream,
             reserved_job_tx,
             shutdown: Notify::new(),
+            get_job_tx,
+            get_job_rx,
         }));
         tokio::spawn(watch_reserved_jobs(reserved_job_rx, connection.clone()));
         connection
@@ -50,6 +56,22 @@ impl Connection {
                         Err(e) => self.send_frame(vec![Data::String(e.to_string())]).await,
                     }
                 }
+                Some(recv) = self.get_job_rx.recv() => {
+                    if let Some((id, ttr, data)) = recv {
+                        self.add_reserved(id, ttr).await;
+                        self.send_frame(
+                            vec![
+                                Data::String("RESERVED".into()),
+                                Data::Integer(id),
+                                Data::Integer(data.len() as u32),
+                                Data::Crlf,
+                                Data::Bytes(data.clone()),
+                            ]
+                        ).await;
+                    } else {
+                        self.send_frame(vec![Data::String("TIMED_OUT".into())]).await;
+                    }
+                }
                 _ = self.shutdown.notified() => {
                     break;
                 }
@@ -58,7 +80,9 @@ impl Connection {
     }
 
     async fn send_frame(&mut self, frame: Vec<Data>) {
-        self.stream.send(frame).await.unwrap();
+        if !frame.is_empty() {
+            self.stream.send(frame).await.unwrap();
+        }
     }
 
     pub async fn handle_frame(
@@ -115,6 +139,10 @@ impl Connection {
 
     pub fn quit(&mut self) {
         self.shutdown.notify_one();
+    }
+
+    pub fn get_job_tx(&self) -> mpsc::Sender<Option<(u32, u32, Bytes)>> {
+        self.get_job_tx.clone()
     }
 }
 

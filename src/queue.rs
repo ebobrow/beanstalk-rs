@@ -128,7 +128,7 @@ impl Queue {
         }
     }
 
-    pub fn reserve_job(&mut self, watch_list: &[String]) -> Poll<&Job> {
+    pub fn reserve_job(&mut self, watch_list: Vec<String>) -> Poll<&Job> {
         let name = watch_list
             .iter()
             .min_by_key(|&name| self.tubes.get(name).unwrap().smallest_pri)
