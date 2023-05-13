@@ -19,6 +19,7 @@ pub struct Queue {
 #[derive(Default)]
 pub struct Tube {
     ready: VecDeque<u32>,
+    delay: Vec<u32>,
     smallest_pri: u32,
 
     /// In original implementation this is a FIFO linked list
@@ -63,7 +64,7 @@ impl Queue {
         //      no longer accepting new jobs. The client should try another server or disconnect
         //      and try again later. To put the server in drain mode, send the SIGUSR1 signal to
         //      the process.
-        let id = self.jobs.len() as u32;
+        let id = self.jobs.len() as u32 + 1;
         self.jobs.push(Job::new(id, ttr, pri, data));
         self.queue_job(tube, id);
         id
@@ -77,8 +78,9 @@ impl Queue {
         delay: u32,
         data: Bytes,
     ) -> u32 {
-        let id = self.jobs.len() as u32;
+        let id = self.jobs.len() as u32 + 1;
         self.jobs.push(Job::new(id, ttr, pri, data));
+        self.new_tube(&tube).delay.push(id);
         self.new_job_tx.send((tube, id, delay)).await.unwrap();
         id
     }
@@ -87,7 +89,10 @@ impl Queue {
         // TODO: why error when use `self.job(&id)`?
         // also just store `&Job`?
         let job = self.jobs.iter().find(|job| job.id == id).unwrap();
-        let tube = self.tubes.entry(tube).or_default();
+        let mut tube = self.tubes.entry(tube).or_default();
+        if let Some((idx, _)) = tube.delay.iter().enumerate().find(|(_, job)| job == &&id) {
+            tube.delay.remove(idx);
+        }
         if tube.ready.is_empty() {
             tube.ready.push_back(id);
             tube.smallest_pri = job.pri;
@@ -125,7 +130,6 @@ impl Queue {
         }
     }
 
-    // TODO: watch ttr
     pub fn reserve_job(&mut self, watch_list: Vec<String>) -> Option<&Job> {
         let name = watch_list
             .iter()
@@ -133,6 +137,27 @@ impl Queue {
             .unwrap();
         let tube = self.tubes.get_mut(name).unwrap();
         tube.ready.pop_front().map(|id| self.job(&id))
+    }
+
+    pub fn reserve_by_id(&mut self, id: u32) -> Option<&Job> {
+        let job = self.jobs.iter().find(|job| job.id == id);
+        for (_, tube) in &mut self.tubes {
+            if let Some((idx, _)) = tube.ready.iter().enumerate().find(|(_, job)| job == &&id) {
+                tube.ready.remove(idx);
+                return job;
+            } else if let Some((idx, _)) =
+                tube.buried.iter().enumerate().find(|(_, job)| job == &&id)
+            {
+                tube.buried.remove(idx);
+                return job;
+            } else if let Some((idx, _)) =
+                tube.delay.iter().enumerate().find(|(_, job)| job == &&id)
+            {
+                tube.delay.remove(idx);
+                return job;
+            }
+        }
+        None
     }
 
     pub fn tube_names(&self) -> std::collections::hash_map::Keys<String, Tube> {
@@ -182,7 +207,7 @@ mod tests {
         queue.new_job("default".to_string(), 0, 1, Bytes::new());
         assert_eq!(
             queue.tubes.get("default").unwrap().ready,
-            VecDeque::from([0, 1, 3, 2])
+            VecDeque::from([1, 2, 4, 3])
         );
     }
 

@@ -107,7 +107,7 @@ impl Cmd {
             Cmd::ReserveWithTimeout { seconds } => {
                 reserve::reserve_with_timeout(connection, queue, seconds).await
             }
-            Cmd::ReserveJob { id } => todo!(),
+            Cmd::ReserveJob { id } => reserve::reserve_job(connection, queue, id).await,
             Cmd::Delete { id } => delete::delete(connection, queue, id).await,
             Cmd::Release { id, pri, delay } => todo!(),
             Cmd::Bury { id, pri } => todo!(),

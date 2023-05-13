@@ -13,21 +13,18 @@ async fn main() {
     let n = stream.read(&mut buffer[..]).await.unwrap();
     println!("{:?}", std::str::from_utf8(&buffer[..n]));
 
-    stream
-        .write_all(b"reserve-with-timeout 2\r\n")
-        .await
-        .unwrap();
+    stream.write_all(b"reserve-job 1\r\n").await.unwrap();
 
     let mut buffer = [0; 1024];
     let n = stream.read(&mut buffer[..]).await.unwrap();
     println!("{:?}", std::str::from_utf8(&buffer[..n]));
 
-    stream
-        .write_all(b"reserve-with-timeout 2\r\n")
-        .await
-        .unwrap();
+    // stream
+    //     .write_all(b"reserve-with-timeout 2\r\n")
+    //     .await
+    //     .unwrap();
 
-    let mut buffer = [0; 1024];
-    let n = stream.read(&mut buffer[..]).await.unwrap();
-    println!("{:?}", std::str::from_utf8(&buffer[..n]));
+    // let mut buffer = [0; 1024];
+    // let n = stream.read(&mut buffer[..]).await.unwrap();
+    // println!("{:?}", std::str::from_utf8(&buffer[..n]));
 }

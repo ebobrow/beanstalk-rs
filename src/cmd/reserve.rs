@@ -30,6 +30,7 @@ pub async fn reserve_with_timeout(
             }
             res = &mut try_reserve => {
                 if let Some(job) = res {
+                    connection.add_reserved(job.id, job.ttr).await;
                     return Ok(vec![
                         Data::String("RESERVED".into()),
                         Data::Integer(job.id),
@@ -48,4 +49,24 @@ pub async fn reserve_with_timeout(
 async fn try_reserve(queue: Arc<Mutex<Queue>>, watch_list: Vec<String>) -> Option<Job> {
     let mut queue = queue.lock().await;
     queue.reserve_job(watch_list).cloned()
+}
+
+pub async fn reserve_job(
+    connection: &mut Connection,
+    queue: Arc<Mutex<Queue>>,
+    id: u32,
+) -> Result<Vec<Data>> {
+    let mut queue = queue.lock().await;
+    if let Some(job) = queue.reserve_by_id(id) {
+        connection.add_reserved(job.id, job.ttr).await;
+        Ok(vec![
+            Data::String("RESERVED".into()),
+            Data::Integer(job.id),
+            Data::Integer(job.data.len() as u32),
+            Data::Crlf,
+            Data::Bytes(job.data.clone()),
+        ])
+    } else {
+        Ok(vec![Data::String("NOT_FOUND".into())])
+    }
 }
