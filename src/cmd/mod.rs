@@ -18,8 +18,6 @@ mod reserve;
 mod r#use;
 mod watch;
 
-pub use reserve::handle_reserved_job;
-
 #[derive(Parse, PartialEq, Debug)]
 pub enum Cmd {
     Put {
@@ -89,6 +87,7 @@ pub enum Cmd {
     },
 }
 
+// TODO: test each of these (https://rust-lang.github.io/async-book/09_example/03_tests.html)
 impl Cmd {
     pub async fn run(
         self,

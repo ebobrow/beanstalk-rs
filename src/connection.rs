@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use bytes::Bytes;
 use futures_util::{stream::FuturesUnordered, SinkExt, StreamExt};
 use tokio::{
     net::TcpStream,
@@ -12,7 +11,7 @@ use tokio::{
 use tokio_util::codec::Framed;
 
 use crate::{
-    cmd::{handle_reserved_job, Cmd},
+    cmd::Cmd,
     codec::{BeanstalkCodec, Data},
     queue::Queue,
 };
@@ -23,8 +22,6 @@ pub struct Connection {
     stream: Framed<TcpStream, BeanstalkCodec>,
 
     reserved_job_tx: mpsc::Sender<ReserveCommand>,
-    get_job_tx: mpsc::Sender<Option<(u32, u32, Bytes)>>,
-    get_job_rx: mpsc::Receiver<Option<(u32, u32, Bytes)>>,
 
     shutdown: Notify,
 }
@@ -32,7 +29,6 @@ pub struct Connection {
 impl Connection {
     pub fn new(stream: Framed<TcpStream, BeanstalkCodec>) -> Arc<Mutex<Self>> {
         let (reserved_job_tx, reserved_job_rx) = mpsc::channel(100);
-        let (get_job_tx, get_job_rx) = mpsc::channel(100);
 
         let connection = Arc::new(Mutex::new(Self {
             tube: "default".into(),
@@ -40,8 +36,6 @@ impl Connection {
             stream,
             reserved_job_tx,
             shutdown: Notify::new(),
-            get_job_tx,
-            get_job_rx,
         }));
         tokio::spawn(watch_reserved_jobs(reserved_job_rx, connection.clone()));
         connection
@@ -56,7 +50,6 @@ impl Connection {
                         Err(e) => self.send_frame(vec![Data::String(e.to_string())]).await,
                     }
                 }
-                Some(recv) = self.get_job_rx.recv() => handle_reserved_job(self, recv).await,
                 _ = self.shutdown.notified() => {
                     break;
                 }
@@ -64,7 +57,7 @@ impl Connection {
         }
     }
 
-    pub async fn send_frame(&mut self, frame: Vec<Data>) {
+    async fn send_frame(&mut self, frame: Vec<Data>) {
         if !frame.is_empty() {
             self.stream.send(frame).await.unwrap();
         }
@@ -124,10 +117,6 @@ impl Connection {
 
     pub fn quit(&mut self) {
         self.shutdown.notify_one();
-    }
-
-    pub fn get_job_tx(&self) -> mpsc::Sender<Option<(u32, u32, Bytes)>> {
-        self.get_job_tx.clone()
     }
 }
 
