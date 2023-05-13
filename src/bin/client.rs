@@ -21,4 +21,13 @@ async fn main() {
     let mut buffer = [0; 1024];
     let n = stream.read(&mut buffer[..]).await.unwrap();
     println!("{:?}", std::str::from_utf8(&buffer[..n]));
+
+    stream
+        .write_all(b"reserve-with-timeout 2\r\n")
+        .await
+        .unwrap();
+
+    let mut buffer = [0; 1024];
+    let n = stream.read(&mut buffer[..]).await.unwrap();
+    println!("{:?}", std::str::from_utf8(&buffer[..n]));
 }

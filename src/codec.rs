@@ -78,7 +78,6 @@ impl BeanstalkCodec {
                     }
                     b'\r' => {
                         assert_eq!(buf[self.next_index + end + 1], b'\n');
-                        // TODO: this number isn't always followed by a job
                         let maybe_num = if let Data::Integer(n) = data {
                             if n > settings::MAX_JOB_SIZE {
                                 bail!("JOB_TOO_BIG");

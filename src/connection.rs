@@ -12,7 +12,7 @@ use tokio::{
 use tokio_util::codec::Framed;
 
 use crate::{
-    cmd::Cmd,
+    cmd::{handle_reserved_job, Cmd},
     codec::{BeanstalkCodec, Data},
     queue::Queue,
 };
@@ -56,22 +56,7 @@ impl Connection {
                         Err(e) => self.send_frame(vec![Data::String(e.to_string())]).await,
                     }
                 }
-                Some(recv) = self.get_job_rx.recv() => {
-                    if let Some((id, ttr, data)) = recv {
-                        self.add_reserved(id, ttr).await;
-                        self.send_frame(
-                            vec![
-                                Data::String("RESERVED".into()),
-                                Data::Integer(id),
-                                Data::Integer(data.len() as u32),
-                                Data::Crlf,
-                                Data::Bytes(data.clone()),
-                            ]
-                        ).await;
-                    } else {
-                        self.send_frame(vec![Data::String("TIMED_OUT".into())]).await;
-                    }
-                }
+                Some(recv) = self.get_job_rx.recv() => handle_reserved_job(self, recv).await,
                 _ = self.shutdown.notified() => {
                     break;
                 }
@@ -79,7 +64,7 @@ impl Connection {
         }
     }
 
-    async fn send_frame(&mut self, frame: Vec<Data>) {
+    pub async fn send_frame(&mut self, frame: Vec<Data>) {
         if !frame.is_empty() {
             self.stream.send(frame).await.unwrap();
         }

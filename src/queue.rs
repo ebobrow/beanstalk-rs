@@ -1,8 +1,5 @@
 use futures_util::StreamExt;
-use std::{
-    collections::{HashMap, VecDeque},
-    task::Poll,
-};
+use std::collections::{HashMap, VecDeque};
 
 use bytes::Bytes;
 use futures_util::stream::FuturesUnordered;
@@ -28,7 +25,7 @@ pub struct Tube {
     buried: Vec<u32>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Job {
     pub id: u32,
     pub ttr: u32,
@@ -128,16 +125,14 @@ impl Queue {
         }
     }
 
-    pub fn reserve_job(&mut self, watch_list: Vec<String>) -> Poll<&Job> {
+    // TODO: watch ttr
+    pub fn reserve_job(&mut self, watch_list: Vec<String>) -> Option<&Job> {
         let name = watch_list
             .iter()
             .min_by_key(|&name| self.tubes.get(name).unwrap().smallest_pri)
             .unwrap();
         let tube = self.tubes.get_mut(name).unwrap();
-        match tube.ready.pop_front() {
-            Some(id) => Poll::Ready(self.job(&id)),
-            None => Poll::Pending,
-        }
+        tube.ready.pop_front().map(|id| self.job(&id))
     }
 
     pub fn tube_names(&self) -> std::collections::hash_map::Keys<String, Tube> {

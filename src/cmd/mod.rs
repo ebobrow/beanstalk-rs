@@ -18,6 +18,8 @@ mod reserve;
 mod r#use;
 mod watch;
 
+pub use reserve::handle_reserved_job;
+
 #[derive(Parse, PartialEq, Debug)]
 pub enum Cmd {
     Put {
